@@ -17,6 +17,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
 import org.modelmapper.ModelMapper;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.userdetails.User;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -50,16 +52,35 @@ public class UserServiceImpl implements UserService {
         return userDTO;
     }
 
+    // Get User By Id
+
+
+    @Override
+    public UserDTO getUserById(Long id) {
+        UserEntity userEntity = userRepository.findById(id).get();
+        return modelMapper.map(userEntity, UserDTO.class);
+    }
+
     // Get All User
     @Override
-    public List<UserDTO> getAllUser() {
+    @Transactional
+    public List<UserRequest> getAllUser() {
         List<UserEntity> listUser = userRepository.findAll();
-        List<UserDTO> listUserDTO = new ArrayList<>();
+        List<UserRequest> listUserRequest = new ArrayList<>();
         for(UserEntity user : listUser){
-            UserDTO userDTO = toDTO(user);
-            listUserDTO.add(userDTO);
+            List<UserRoleEntity> listUserRole = user.getListUserRole();
+            List<String> listRoles = new ArrayList<>();
+            for(UserRoleEntity it : listUserRole){
+                listRoles.add(it.getRole().getName());
+            }
+            listUserRequest.add(UserRequest.builder()
+                    .username(user.getUsername())
+                            .displayName(user.getDisplayName())
+                            .email(user.getEmail())
+                            .roles(listRoles)
+                    .build());
         }
-        return listUserDTO;
+        return listUserRequest;
     }
 
     @Override
@@ -105,7 +126,7 @@ public class UserServiceImpl implements UserService {
         return toDTO(newUser);
     }
 
-    // Update Status User
+    // Update Active User
     @Override
     @Transactional
     public UserDTO updateStatusUser(
@@ -118,7 +139,7 @@ public class UserServiceImpl implements UserService {
                         "Không tìm thấy user"
                 ));
 
-        boolean active = request.getStatus() == 1;
+        boolean active = request.getIs_active() == 1;
 
         user.setIsActive(active);
 
@@ -144,16 +165,16 @@ public class UserServiceImpl implements UserService {
             throw new RuntimeException("Email bị trùng");
         }
 
-
+        user.setPassword(passwordEncoder.encode(request.getPassword()));
         user.setUsername(request.getUsername());
         user.setEmail(request.getEmail());
         user.setDisplayName(request.getDisplayName());
 
-        Set<String> requestedCodes = request.getRoles();
+        List<String> requestedCodes = request.getRoles();
         if (requestedCodes == null) {
             requestedCodes = userRoleRepository.findAllByUser(user).stream()
                     .map(link -> link.getRole().getCode())
-                    .collect(Collectors.toSet());
+                    .collect(Collectors.toList());
         }
         Map<String, RoleEntity> requestedRoles = new HashMap<>();
         for (String code : requestedCodes) {

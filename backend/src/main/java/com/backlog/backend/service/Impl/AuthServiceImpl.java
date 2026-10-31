@@ -5,8 +5,11 @@ import com.backlog.backend.model.response.AuthResponse;
 import com.backlog.backend.model.response.IntrospectResponse;
 import com.backlog.backend.model.request.AuthRequest;
 import com.backlog.backend.model.request.IntrospectRequest;
+import com.backlog.backend.entity.InvalidatedTokenEntity;
+import com.backlog.backend.repository.InvalidatedTokenRepository;
 import com.backlog.backend.repository.UserRepository;
 import com.backlog.backend.service.AuthService;
+import com.backlog.backend.service.TokenHash;
 import com.nimbusds.jose.*;
 import com.nimbusds.jose.crypto.MACSigner;
 import com.nimbusds.jose.crypto.MACVerifier;
@@ -22,13 +25,16 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.DisabledException;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.text.ParseException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Base64;
 import java.util.Date;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -37,6 +43,7 @@ import java.util.Date;
 public class AuthServiceImpl implements AuthService {
     UserRepository userRepository;
     PasswordEncoder passwordEncoder;
+    InvalidatedTokenRepository invalidatedTokenRepository;
     @NonFinal
     @Value("${jwt.signerKey}")
     protected String SIGNER_KEY;
@@ -71,12 +78,15 @@ public class AuthServiceImpl implements AuthService {
             boolean activeUser = userName != null && userRepository.findByUsername(userName)
                     .map(user -> Boolean.TRUE.equals(user.getIsActive()))
                     .orElse(false);
+            boolean invalidated = invalidatedTokenRepository.existsById(
+                    TokenHash.of(introspectRequest.getToken()));
 
             return IntrospectResponse.builder()
                     .valid(verified
                             && expirationTime != null
                             && expirationTime.after(new Date())
-                            && activeUser)
+                            && activeUser
+                            && !invalidated)
                     .build();
         } catch (JOSEException | ParseException | IllegalArgumentException e) {
             return IntrospectResponse.builder().valid(false).build();
@@ -86,11 +96,20 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
+    @Transactional
+    public void logout(Jwt jwt) {
+        invalidatedTokenRepository.deleteByExpiresAtBefore(Instant.now());
+        invalidatedTokenRepository.save(new InvalidatedTokenEntity(
+                TokenHash.of(jwt.getTokenValue()), jwt.getExpiresAt()));
+    }
+
+    @Override
     public String generateToken(String userName) {
 
         JWSHeader header = new JWSHeader(JWSAlgorithm.HS256);
         JWTClaimsSet jwtClaimsSet = new JWTClaimsSet.Builder()
                 .subject(userName)
+                .jwtID(UUID.randomUUID().toString())
                 .issuer("blog.com")
                 .issueTime(new Date())
                 .expirationTime(new Date(

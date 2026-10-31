@@ -1,18 +1,17 @@
 package com.backlog.backend.model.response;
 
 import jakarta.validation.constraints.NotNull;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class ChangeStatusRequest {
-
     @NotNull(message = "Status không được để trống")
-    // không cần check value vì thay đổi theo checkbox FE
-    private Integer status;
-
-    public Integer getStatus() {
-        return status;
-    }
-
-    public void setStatus(Integer status) {
-        this.status = status;
-    }
+    private Integer is_active;
 }

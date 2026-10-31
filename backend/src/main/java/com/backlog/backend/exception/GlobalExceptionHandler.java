@@ -60,7 +60,7 @@ public class GlobalExceptionHandler {
                 .collect(Collectors.toList());
         ErrorResponse errorResponse = new ErrorResponse(
                 LocalDateTime.now(),
-                403,
+                400,
                 String.join(",",errors),
                 ex.getMessage(),
                 request.getRequestURI()

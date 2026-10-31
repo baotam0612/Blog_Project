@@ -12,6 +12,7 @@ import jakarta.validation.Valid;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.FieldDefaults;
+import org.modelmapper.ModelMapper;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
@@ -25,11 +26,19 @@ import java.util.List;
 @FieldDefaults(level = AccessLevel.PRIVATE, makeFinal = true)
 public class UserController {
      final UserService userService;
+    private final ModelMapper modelMapper;
 
-//    public UserController(UserService userService, ModelMapper modelMapper){
+    //    public UserController(UserService userService, ModelMapper modelMapper){
 //        this.userService = userService;
 //        this.modelMapper = modelMapper;
 //    }
+        private UserResponse toResponse(UserDTO user) {
+            return UserResponse.builder()
+                    .userName(user.getUsername())
+                    .email(user.getEmail())
+                    .displayName(user.getDisplayName())
+                    .build();
+        }
 
     // Get All Users
     @GetMapping("/users/me")
@@ -39,22 +48,23 @@ public class UserController {
                 toResponse(user));
     }
 
-    private UserResponse toResponse(UserDTO user) {
-        return UserResponse.builder()
-                .userName(user.getUsername())
-                .email(user.getEmail())
-                .displayName(user.getDisplayName())
-                .build();
+
+    // Get User By Id
+    @GetMapping("/users/{id}")
+    public PayloadResponse getUserById(@PathVariable Long id){
+            UserDTO userDTO = userService.getUserById(id);
+            UserRequest res = modelMapper.map(userDTO, UserRequest.class);
+            return new PayloadResponse(HttpStatus.OK, "Find User By Id Successfully", res);
     }
 
+
+
+    // Get All Users
     @GetMapping("/users")
     public PayloadResponse getAllUsers(){
-        List<UserDTO> listUser = userService.getAllUser();
-        List<UserResponse> res = new ArrayList<>();
-        for(UserDTO it : listUser){
-            res.add(toResponse(it));
-        }
-        return new PayloadResponse(HttpStatus.OK, "Get All User sucessfully", res);
+        List<UserRequest> listUser = userService.getAllUser();
+
+        return new PayloadResponse(HttpStatus.OK, "Get All User sucessfully", listUser);
     }
 
 
@@ -68,7 +78,7 @@ public class UserController {
     }
 
     // Update User Status
-    @PatchMapping("/users/{id}/change-status")
+    @PatchMapping("/users/{id}/change-active")
     public PayloadResponse updateStatusUser(@PathVariable Long id, @Valid @RequestBody ChangeStatusRequest changeStatusRequest){
         UserDTO res = userService.updateStatusUser(id, changeStatusRequest);
         return new PayloadResponse(HttpStatus.OK, "Update Status Sucessfully", res);

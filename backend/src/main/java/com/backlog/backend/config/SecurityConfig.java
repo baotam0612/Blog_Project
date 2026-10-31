@@ -2,6 +2,8 @@ package com.backlog.backend.config;
 
 import com.backlog.backend.repository.UserRepository;
 import com.backlog.backend.repository.UserRoleRepository;
+import com.backlog.backend.repository.InvalidatedTokenRepository;
+import com.backlog.backend.service.TokenHash;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -17,6 +19,7 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.BadJwtException;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.web.SecurityFilterChain;
@@ -39,6 +42,8 @@ public class SecurityConfig {
         httpSecurity.authorizeHttpRequests(request ->
                 request.requestMatchers(HttpMethod.POST, "/api/v1/users", "/api/v1/auth/token", "/api/v1/auth/introspect").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/users/me").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/logout").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/posts/**").permitAll()
                         .requestMatchers("/api/v1/users/**", "/api/v1/users").hasRole("ADMIN")
                         .anyRequest().denyAll());
         httpSecurity.oauth2ResourceServer(oauth2 ->
@@ -72,13 +77,23 @@ public class SecurityConfig {
 
 
     @Bean
-    JwtDecoder jwtDecoder(){
+    JwtDecoder jwtDecoder(InvalidatedTokenRepository invalidatedTokenRepository){
         // gồm 2 thông số secret va algo
         byte[] secret = Base64.getDecoder().decode(SIGNER_KEY);
         SecretKeySpec secretKeySpec = new SecretKeySpec(secret, "HS256");
-        return NimbusJwtDecoder.withSecretKey(secretKeySpec)
+        JwtDecoder decoder = NimbusJwtDecoder.withSecretKey(secretKeySpec)
                 .macAlgorithm(MacAlgorithm.HS256)
                 .build();
+        return token -> {
+            var jwt = decoder.decode(token);
+            if (jwt.getExpiresAt() == null) {
+                throw new BadJwtException("Token không có hạn sử dụng");
+            }
+            if (invalidatedTokenRepository.existsById(TokenHash.of(token))) {
+                throw new BadJwtException("Token đã được đăng xuất");
+            }
+            return jwt;
+        };
     }
 
     @Bean

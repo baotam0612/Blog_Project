@@ -9,6 +9,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.util.HashSet;
+import java.util.List;
 
 @Data
 @NoArgsConstructor
@@ -32,7 +33,7 @@ public  class UserRequest {
     @Size(max = 100, message = "Tên hiển thị tối đa 100 ký tự")
     private String displayName;
 
-    private HashSet<String> roles;
+    private List<String> roles;
 
 
 

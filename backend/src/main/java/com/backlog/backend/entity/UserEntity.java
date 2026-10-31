@@ -3,11 +3,13 @@ package com.backlog.backend.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
+import lombok.experimental.FieldDefaults;
 
 import java.math.BigInteger;
 import java.util.List;
 
-@Data
+@Getter
+@Setter
 @Entity
 @Table(name = "users",uniqueConstraints = {
         @UniqueConstraint(columnNames = "username"), @UniqueConstraint(columnNames = "email")
@@ -15,30 +17,33 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@FieldDefaults(level = AccessLevel.PRIVATE)
 public class UserEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+     Long id;
 
     @Column(name="username")
-    private String username;
+     String username;
 
     @Column(name="email")
-    private String email;
+     String email;
 
     @Column(name = "password_hash")
-    private String password;
+     String password;
 
     @Column(name = "display_name")
-    private String displayName;
+     String displayName;
 
     @Column(name = "is_active")
-    private Boolean isActive;
+     Boolean isActive;
 
     @OneToMany(mappedBy = "user", fetch = FetchType.LAZY)
-    private List<UserRoleEntity> listUserRole;
+     List<UserRoleEntity> listUserRole;
 
+    @OneToMany(mappedBy = "userPost", fetch = FetchType.LAZY)
+    List<PostEntity> listPost ;
 
 
 

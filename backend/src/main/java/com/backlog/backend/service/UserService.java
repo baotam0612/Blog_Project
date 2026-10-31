@@ -9,8 +9,9 @@ import java.util.List;
 
 
 public interface UserService {
-    List<UserDTO> getAllUser();
+    List<UserRequest> getAllUser();
     UserDTO getCurrentUser(String userName);
+    UserDTO getUserById(Long id);
     UserDTO createUser(UserRequest userRequest);
     UserDTO updateStatusUser(Long id, ChangeStatusRequest changeStatusRequest);
     UserDTO updateUser(Long id, UserRequest userRequest);

@@ -5,6 +5,8 @@ import com.backlog.backend.entity.UserEntity;
 import com.backlog.backend.model.dto.UserDTO;
 import com.backlog.backend.repository.UserRepository;
 import com.backlog.backend.repository.UserRoleRepository;
+import com.backlog.backend.repository.InvalidatedTokenRepository;
+import com.backlog.backend.service.TokenHash;
 import com.backlog.backend.service.UserService;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
@@ -19,6 +21,7 @@ import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.modelmapper.ModelMapper;
 
 import java.util.List;
 import java.util.Base64;
@@ -39,6 +42,8 @@ class UserAuthorizationTest {
     @MockitoBean UserService userService;
     @MockitoBean UserRepository userRepository;
     @MockitoBean UserRoleRepository userRoleRepository;
+    @MockitoBean InvalidatedTokenRepository invalidatedTokenRepository;
+    @MockitoBean ModelMapper modelMapper;
 
     @Test
     void anonymousCannotListUsers() throws Exception {
@@ -98,6 +103,16 @@ class UserAuthorizationTest {
 
         mvc.perform(get("/api/v1/users/me")
                         .header("Authorization", "Bearer " + signedToken("alice")))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void loggedOutTokenCannotBeUsed() throws Exception {
+        String token = signedToken("alice");
+        when(invalidatedTokenRepository.existsById(TokenHash.of(token))).thenReturn(true);
+
+        mvc.perform(get("/api/v1/users/me")
+                        .header("Authorization", "Bearer " + token))
                 .andExpect(status().isUnauthorized());
     }
 
