@@ -7,12 +7,12 @@ import org.springframework.http.ResponseEntity;
 public class PayloadResponse extends ResponseEntity<PayloadResponse.Payload> {
     // PATCH PUT DELETE
     public PayloadResponse(HttpStatusCode status, String message) {
-        super(new Payload(status.value(),message), HttpStatus.OK);
+        super(new Payload(status.value(),message), status);
     }
 
     // GET POST
     public PayloadResponse(HttpStatusCode status, String message, Object data) {
-        super(new Payload(status.value(),message,data), HttpStatus.OK);
+        super(new Payload(status.value(),message,data), status);
     }
 
 

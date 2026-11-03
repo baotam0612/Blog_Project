@@ -39,7 +39,7 @@ public class UserEntity {
     @Column(name = "is_active")
      Boolean isActive;
 
-    @OneToMany(mappedBy = "user", fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "user", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
      List<UserRoleEntity> listUserRole;
 
     @OneToMany(mappedBy = "userPost", fetch = FetchType.LAZY)

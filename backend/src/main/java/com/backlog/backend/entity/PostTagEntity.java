@@ -25,4 +25,11 @@ public class PostTagEntity {
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "tag_id", nullable = false)
     private TagEntity tag;
+
+
+
+    public PostTagEntity(PostEntity post, TagEntity tag) {
+        this.post = post;
+        this.tag = tag;
+    }
 }

@@ -5,6 +5,7 @@ import lombok.*;
 import lombok.experimental.FieldDefaults;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 @NoArgsConstructor
@@ -12,6 +13,8 @@ import java.time.LocalDateTime;
 @Builder
 @FieldDefaults(level = AccessLevel.PRIVATE)
 public class PostDTO {
+
+    Long id;
     String title;
     String slug;
     String excerpt;
@@ -21,4 +24,11 @@ public class PostDTO {
     LocalDateTime createdAt;
     LocalDateTime updatedAt;
     LocalDateTime publishedAt;
+    Long authorId;
+    String authorUsername;
+    String authorDisplayName;
+    Long categoryId;
+    String categoryName;
+    List<Long> tagIds;
+    List<String> tagNames;
 }

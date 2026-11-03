@@ -93,7 +93,7 @@ public class UserController {
     }
 
     // Delete User
-    @DeleteMapping("/users/{id}")
+    @DeleteMapping("/users/{id}/remove")
     public PayloadResponse deleteUser(@PathVariable Long id){
         userService.deleteUser(id);
         return new PayloadResponse(HttpStatus.OK,"Delete Sucessfully");

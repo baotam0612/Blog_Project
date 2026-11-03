@@ -57,7 +57,7 @@ public class PostEntity {
     private LocalDateTime publishedAt;
 
 
-    @OneToMany(mappedBy = "post", fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "post", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
     List<PostTagEntity> listPost = new ArrayList<>();
 
     @ManyToOne(fetch = FetchType.EAGER)

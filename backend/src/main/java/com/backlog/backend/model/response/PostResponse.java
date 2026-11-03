@@ -21,8 +21,8 @@ public class PostResponse {
     String status;
     LocalDateTime createdAt;
     LocalDateTime updatedAt;
-    LocalDateTime pushlishedAt;
+    LocalDateTime publishedAt;
     String username;
     String categoryName;
-    List<String> tagname;
+    List<String> tagNames;
 }
