@@ -11,6 +11,7 @@ import com.backlog.backend.repository.RoleRepository;
 import com.backlog.backend.repository.UserRepository;
 import com.backlog.backend.repository.UserRoleRepository;
 import com.backlog.backend.service.UserService;
+import com.backlog.backend.service.UserAuthCacheService;
 import jakarta.transaction.Transactional;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +38,7 @@ public class UserServiceImpl implements UserService {
     final RoleRepository roleRepository;
     final UserRoleRepository userRoleRepository;
     PasswordEncoder passwordEncoder;
+    UserAuthCacheService userAuthCacheService;
 
 //    public UserServiceImpl(ModelMapper modelMapper, UserRepository userRepository, RoleRepository roleRepository, UserRoleRepository userRoleRepository){
 //        this.modelMapper = modelMapper;
@@ -46,15 +48,18 @@ public class UserServiceImpl implements UserService {
 //    }
     private UserDTO toDTO(UserEntity userEntity){
         UserDTO userDTO = new UserDTO();
+        List<String> roles = new ArrayList<>();
+        List<UserRoleEntity> user = userRoleRepository.findByUser(userEntity);
+        for(UserRoleEntity it : user)
+            roles.add(it.getRole().getCode());
         userDTO.setUsername(userEntity.getUsername());
         userDTO.setEmail(userEntity.getEmail());
         userDTO.setDisplayName(userEntity.getDisplayName());
+        userDTO.setRoles(roles);
         return userDTO;
     }
 
     // Get User By Id
-
-
     @Override
     public UserDTO getUserById(Long id) {
         UserEntity userEntity = userRepository.findById(id).get();
@@ -87,6 +92,7 @@ public class UserServiceImpl implements UserService {
     public UserDTO getCurrentUser(String userName) {
         UserEntity user = userRepository.findByUsername(userName)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy user"));
+
         return toDTO(user);
     }
 
@@ -144,6 +150,7 @@ public class UserServiceImpl implements UserService {
         user.setIsActive(active);
 
         UserEntity savedUser = userRepository.save(user);
+        userAuthCacheService.deleteUserAuth(savedUser.getUsername());
 
         return toDTO(savedUser);
     }
@@ -155,6 +162,8 @@ public class UserServiceImpl implements UserService {
         UserEntity user = userRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Không tìm thấy user"));
+
+        String oldUsername = user.getUsername();
 
         if (!Objects.equals(request.getUsername(), user.getUsername())
                 && userRepository.existsByUsername(request.getUsername())) {
@@ -205,6 +214,9 @@ public class UserServiceImpl implements UserService {
             }
         }
 
+        userAuthCacheService.deleteUserAuth(oldUsername);
+        userAuthCacheService.deleteUserAuth(user.getUsername());
+
         return toDTO(user);
     }
 
@@ -213,6 +225,7 @@ public class UserServiceImpl implements UserService {
     public void deleteUser(Long id) {
         UserEntity user = userRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy user"));
+        userAuthCacheService.deleteUserAuth(user.getUsername());
         userRoleRepository.deleteAll(userRoleRepository.findAllByUser(user));
         userRepository.deleteById(id);
     }

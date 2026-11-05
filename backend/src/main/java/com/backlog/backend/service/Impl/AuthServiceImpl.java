@@ -5,11 +5,11 @@ import com.backlog.backend.model.response.AuthResponse;
 import com.backlog.backend.model.response.IntrospectResponse;
 import com.backlog.backend.model.request.AuthRequest;
 import com.backlog.backend.model.request.IntrospectRequest;
-import com.backlog.backend.entity.InvalidatedTokenEntity;
-import com.backlog.backend.repository.InvalidatedTokenRepository;
 import com.backlog.backend.repository.UserRepository;
 import com.backlog.backend.service.AuthService;
 import com.backlog.backend.service.TokenHash;
+import com.backlog.backend.service.TokenBlacklistService;
+import com.backlog.backend.service.UserAuthCacheService;
 import com.nimbusds.jose.*;
 import com.nimbusds.jose.crypto.MACSigner;
 import com.nimbusds.jose.crypto.MACVerifier;
@@ -27,7 +27,6 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.text.ParseException;
 import java.time.Instant;
@@ -43,7 +42,8 @@ import java.util.UUID;
 public class AuthServiceImpl implements AuthService {
     UserRepository userRepository;
     PasswordEncoder passwordEncoder;
-    InvalidatedTokenRepository invalidatedTokenRepository;
+    TokenBlacklistService tokenBlacklistService;
+    UserAuthCacheService userAuthCacheService;
     @NonFinal
     @Value("${jwt.signerKey}")
     protected String SIGNER_KEY;
@@ -51,8 +51,10 @@ public class AuthServiceImpl implements AuthService {
     public AuthResponse authenticate(AuthRequest authRequest) {
         var user = userRepository.findByUsername(authRequest.getUsername())
                 .orElseThrow(() -> new UsernameNotFoundException("Sai ten nguoi dung"));
+
         if (!Boolean.TRUE.equals(user.getIsActive()))
             throw new DisabledException("Tài khoản đã bị vô hiệu hóa");
+
         boolean authenticated = passwordEncoder.matches(authRequest.getPassword(), user.getPassword());
         if(!authenticated)
             throw new BadCredentialsException("Sai mat khau");
@@ -75,11 +77,13 @@ public class AuthServiceImpl implements AuthService {
             boolean verified = jwt.verify(verifier);
             Date expirationTime = jwt.getJWTClaimsSet().getExpirationTime();
             String userName = jwt.getJWTClaimsSet().getSubject();
-            boolean activeUser = userName != null && userRepository.findByUsername(userName)
-                    .map(user -> Boolean.TRUE.equals(user.getIsActive()))
-                    .orElse(false);
-            boolean invalidated = invalidatedTokenRepository.existsById(
-                    TokenHash.of(introspectRequest.getToken()));
+            boolean activeUser = userName != null
+                    && Boolean.TRUE.equals(userAuthCacheService.getUserAuth(userName).getActive());
+            String tokenId = jwt.getJWTClaimsSet().getJWTID();
+            if (tokenId == null || tokenId.isBlank()) {
+                tokenId = TokenHash.of(introspectRequest.getToken());
+            }
+            boolean invalidated = tokenBlacklistService.isBlacklisted(tokenId);
 
             return IntrospectResponse.builder()
                     .valid(verified
@@ -88,7 +92,7 @@ public class AuthServiceImpl implements AuthService {
                             && activeUser
                             && !invalidated)
                     .build();
-        } catch (JOSEException | ParseException | IllegalArgumentException e) {
+        } catch (JOSEException | ParseException | RuntimeException e) {
             return IntrospectResponse.builder().valid(false).build();
         }
 
@@ -96,11 +100,12 @@ public class AuthServiceImpl implements AuthService {
     }
 
     @Override
-    @Transactional
     public void logout(Jwt jwt) {
-        invalidatedTokenRepository.deleteByExpiresAtBefore(Instant.now());
-        invalidatedTokenRepository.save(new InvalidatedTokenEntity(
-                TokenHash.of(jwt.getTokenValue()), jwt.getExpiresAt()));
+        String tokenId = jwt.getId();
+        if (tokenId == null || tokenId.isBlank()) {
+            tokenId = TokenHash.of(jwt.getTokenValue());
+        }
+        tokenBlacklistService.blacklist(tokenId, jwt.getExpiresAt());
     }
 
     @Override

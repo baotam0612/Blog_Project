@@ -1,14 +1,12 @@
 package com.backlog.backend.config;
 
-import com.backlog.backend.entity.UserEntity;
-import com.backlog.backend.repository.UserRepository;
-import com.backlog.backend.repository.UserRoleRepository;
+import com.backlog.backend.model.dto.UserAuthCacheDTO;
+import com.backlog.backend.service.UserAuthCacheService;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.oauth2.jwt.Jwt;
 
 import java.util.List;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -16,8 +14,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class SecurityConfigTest {
-    private final UserRepository users = mock(UserRepository.class);
-    private final UserRoleRepository userRoles = mock(UserRoleRepository.class);
+    private final UserAuthCacheService userAuthCacheService = mock(UserAuthCacheService.class);
     private final SecurityConfig config = new SecurityConfig();
     private final Jwt jwt = Jwt.withTokenValue("token")
             .header("alg", "HS256")
@@ -25,13 +22,16 @@ class SecurityConfigTest {
             .build();
 
     @Test
-    void resolvesCurrentRolesFromDatabase() {
-        UserEntity user = UserEntity.builder().username("alice").isActive(true).build();
-        when(users.findByUsername("alice")).thenReturn(Optional.of(user));
-        when(userRoles.findRoleCodesByUserName("alice"))
-                .thenReturn(List.of("READER"), List.of("ADMIN"));
+    void resolvesCurrentRolesFromCache() {
+        when(userAuthCacheService.getUserAuth("alice"))
+                .thenReturn(
+                        UserAuthCacheDTO.builder().username("alice").active(true)
+                                .roles(List.of("READER")).build(),
+                        UserAuthCacheDTO.builder().username("alice").active(true)
+                                .roles(List.of("ADMIN")).build()
+                );
 
-        var converter = config.jwtAuthenticationConverter(users, userRoles);
+        var converter = config.jwtAuthenticationConverter(userAuthCacheService);
         assertTrue(converter.convert(jwt).getAuthorities().stream()
                 .anyMatch(authority -> "ROLE_READER".equals(authority.getAuthority())));
         assertTrue(converter.convert(jwt).getAuthorities().stream()
@@ -40,10 +40,11 @@ class SecurityConfigTest {
 
     @Test
     void rejectsDisabledAccount() {
-        when(users.findByUsername("alice"))
-                .thenReturn(Optional.of(UserEntity.builder().username("alice").isActive(false).build()));
+        when(userAuthCacheService.getUserAuth("alice"))
+                .thenReturn(UserAuthCacheDTO.builder()
+                        .username("alice").active(false).roles(List.of()).build());
 
-        var converter = config.jwtAuthenticationConverter(users, userRoles);
+        var converter = config.jwtAuthenticationConverter(userAuthCacheService);
         assertThrows(BadCredentialsException.class, () -> converter.convert(jwt));
     }
 }

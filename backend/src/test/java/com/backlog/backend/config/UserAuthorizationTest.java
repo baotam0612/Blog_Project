@@ -1,13 +1,12 @@
 package com.backlog.backend.config;
 
 import com.backlog.backend.controller.UserController;
-import com.backlog.backend.entity.UserEntity;
 import com.backlog.backend.model.dto.UserDTO;
-import com.backlog.backend.repository.UserRepository;
-import com.backlog.backend.repository.UserRoleRepository;
-import com.backlog.backend.repository.InvalidatedTokenRepository;
 import com.backlog.backend.service.TokenHash;
 import com.backlog.backend.service.UserService;
+import com.backlog.backend.service.TokenBlacklistService;
+import com.backlog.backend.service.UserAuthCacheService;
+import com.backlog.backend.model.dto.UserAuthCacheDTO;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
 import com.nimbusds.jose.crypto.MACSigner;
@@ -26,7 +25,6 @@ import org.modelmapper.ModelMapper;
 import java.util.List;
 import java.util.Base64;
 import java.util.Date;
-import java.util.Optional;
 
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -40,9 +38,8 @@ class UserAuthorizationTest {
     private static final String TEST_SECRET = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=";
     @Autowired MockMvc mvc;
     @MockitoBean UserService userService;
-    @MockitoBean UserRepository userRepository;
-    @MockitoBean UserRoleRepository userRoleRepository;
-    @MockitoBean InvalidatedTokenRepository invalidatedTokenRepository;
+    @MockitoBean TokenBlacklistService tokenBlacklistService;
+    @MockitoBean UserAuthCacheService userAuthCacheService;
     @MockitoBean ModelMapper modelMapper;
 
     @Test
@@ -83,11 +80,14 @@ class UserAuthorizationTest {
     }
 
     @Test
-    void bearerTokenUsesDatabaseRoleAndAccountStatus() throws Exception {
-        UserEntity user = UserEntity.builder().username("alice").isActive(true).build();
-        when(userRepository.findByUsername("alice")).thenReturn(Optional.of(user));
-        when(userRoleRepository.findRoleCodesByUserName("alice"))
-                .thenReturn(List.of("READER"), List.of("ADMIN"));
+    void bearerTokenUsesCachedRoleAndAccountStatus() throws Exception {
+        when(userAuthCacheService.getUserAuth("alice"))
+                .thenReturn(
+                        UserAuthCacheDTO.builder().username("alice").active(true)
+                                .roles(List.of("READER")).build(),
+                        UserAuthCacheDTO.builder().username("alice").active(true)
+                                .roles(List.of("ADMIN")).build()
+                );
         String token = signedToken("alice");
 
         mvc.perform(get("/api/v1/users").header("Authorization", "Bearer " + token))
@@ -98,8 +98,9 @@ class UserAuthorizationTest {
 
     @Test
     void disabledAccountCannotUseExistingToken() throws Exception {
-        when(userRepository.findByUsername("alice"))
-                .thenReturn(Optional.of(UserEntity.builder().username("alice").isActive(false).build()));
+        when(userAuthCacheService.getUserAuth("alice"))
+                .thenReturn(UserAuthCacheDTO.builder().username("alice")
+                        .active(false).roles(List.of()).build());
 
         mvc.perform(get("/api/v1/users/me")
                         .header("Authorization", "Bearer " + signedToken("alice")))
@@ -109,7 +110,7 @@ class UserAuthorizationTest {
     @Test
     void loggedOutTokenCannotBeUsed() throws Exception {
         String token = signedToken("alice");
-        when(invalidatedTokenRepository.existsById(TokenHash.of(token))).thenReturn(true);
+        when(tokenBlacklistService.isBlacklisted(TokenHash.of(token))).thenReturn(true);
 
         mvc.perform(get("/api/v1/users/me")
                         .header("Authorization", "Bearer " + token))

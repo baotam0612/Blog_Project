@@ -9,6 +9,7 @@ import com.backlog.backend.model.request.PostRequest;
 import com.backlog.backend.model.request.UpdateStatusRequest;
 import com.backlog.backend.model.response.PostResponse;
 import com.backlog.backend.repository.*;
+import com.backlog.backend.service.PostAttachmentService;
 import com.backlog.backend.service.PostService;
 import com.backlog.backend.service.PostTagService;
 import jakarta.transaction.Transactional;
@@ -42,6 +43,7 @@ public class PostServiceImpl implements PostService {
     PostTagRepository postTagRepository;
     TagRepository tagRepository;
     UserRepository userRepository;
+    PostAttachmentService postAttachmentService;
 
 
 
@@ -241,6 +243,7 @@ public class PostServiceImpl implements PostService {
                 .orElseThrow(() -> new ResourceNotFoundException("Post not found to update post"));
         if(!Objects.equals(postEntity.getUserPost().getId(), user.getId()))
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,"User Forbidden");
+        postAttachmentService.deleteAllByPostId(id);
         postRepository.deleteById(id);
     }
 

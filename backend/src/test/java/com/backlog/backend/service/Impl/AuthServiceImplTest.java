@@ -1,11 +1,10 @@
 package com.backlog.backend.service.Impl;
 
-import com.backlog.backend.entity.InvalidatedTokenEntity;
-import com.backlog.backend.entity.UserEntity;
+import com.backlog.backend.model.dto.UserAuthCacheDTO;
 import com.backlog.backend.model.request.IntrospectRequest;
-import com.backlog.backend.repository.InvalidatedTokenRepository;
 import com.backlog.backend.repository.UserRepository;
-import com.backlog.backend.service.TokenHash;
+import com.backlog.backend.service.TokenBlacklistService;
+import com.backlog.backend.service.UserAuthCacheService;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
 import com.nimbusds.jose.crypto.MACSigner;
@@ -19,23 +18,20 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.Date;
-import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import org.mockito.ArgumentCaptor;
 
 class AuthServiceImplTest {
     private static final String TEST_SECRET = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY=";
     private final UserRepository users = mock(UserRepository.class);
-    private final InvalidatedTokenRepository invalidatedTokens = mock(InvalidatedTokenRepository.class);
+    private final TokenBlacklistService tokenBlacklist = mock(TokenBlacklistService.class);
+    private final UserAuthCacheService userAuthCache = mock(UserAuthCacheService.class);
     private final AuthServiceImpl service = new AuthServiceImpl(
-            users, mock(PasswordEncoder.class), invalidatedTokens);
+            users, mock(PasswordEncoder.class), tokenBlacklist, userAuthCache);
 
     @Test
     void separateLoginsReceiveDifferentTokens() {
@@ -48,20 +44,18 @@ class AuthServiceImplTest {
     }
 
     @Test
-    void logoutStoresHashAndExpiry() {
+    void logoutStoresTokenIdAndExpiry() {
         Instant expiry = Instant.now().plusSeconds(3600);
         Jwt jwt = Jwt.withTokenValue("signed.jwt.token")
                 .header("alg", "HS256")
                 .subject("alice")
+                .claim("jti", "token-id")
                 .expiresAt(expiry)
                 .build();
 
         service.logout(jwt);
 
-        ArgumentCaptor<InvalidatedTokenEntity> saved = ArgumentCaptor.forClass(InvalidatedTokenEntity.class);
-        verify(invalidatedTokens).save(saved.capture());
-        assertEquals(TokenHash.of(jwt.getTokenValue()), saved.getValue().getTokenHash());
-        assertEquals(expiry, saved.getValue().getExpiresAt());
+        verify(tokenBlacklist).blacklist("token-id", expiry);
     }
 
     @Test
@@ -70,13 +64,15 @@ class AuthServiceImplTest {
         SignedJWT jwt = new SignedJWT(new JWSHeader(JWSAlgorithm.HS256),
                 new JWTClaimsSet.Builder()
                         .subject("alice")
+                        .jwtID("token-id")
                         .expirationTime(new Date(System.currentTimeMillis() + 60_000))
                         .build());
         jwt.sign(new MACSigner(Base64.getDecoder().decode(TEST_SECRET)));
         String token = jwt.serialize();
-        when(users.findByUsername("alice"))
-                .thenReturn(Optional.of(UserEntity.builder().username("alice").isActive(true).build()));
-        when(invalidatedTokens.existsById(eq(TokenHash.of(token))))
+        when(userAuthCache.getUserAuth("alice"))
+                .thenReturn(UserAuthCacheDTO.builder().username("alice")
+                        .active(true).build());
+        when(tokenBlacklist.isBlacklisted("token-id"))
                 .thenReturn(false, true);
 
         assertTrue(service.authenticate(new IntrospectRequest(token)).isValid());

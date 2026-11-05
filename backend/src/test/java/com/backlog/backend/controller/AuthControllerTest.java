@@ -1,11 +1,11 @@
 package com.backlog.backend.controller;
 
 import com.backlog.backend.config.SecurityConfig;
-import com.backlog.backend.entity.UserEntity;
-import com.backlog.backend.repository.InvalidatedTokenRepository;
-import com.backlog.backend.repository.UserRepository;
-import com.backlog.backend.repository.UserRoleRepository;
 import com.backlog.backend.service.AuthService;
+import com.backlog.backend.service.LoginRateLimitService;
+import com.backlog.backend.service.TokenBlacklistService;
+import com.backlog.backend.service.UserAuthCacheService;
+import com.backlog.backend.model.dto.UserAuthCacheDTO;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
 import com.nimbusds.jose.crypto.MACSigner;
@@ -22,7 +22,7 @@ import org.mockito.ArgumentCaptor;
 
 import java.util.Base64;
 import java.util.Date;
-import java.util.Optional;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.verify;
@@ -37,9 +37,9 @@ class AuthControllerTest {
 
     @Autowired MockMvc mvc;
     @MockitoBean AuthService authService;
-    @MockitoBean UserRepository userRepository;
-    @MockitoBean UserRoleRepository userRoleRepository;
-    @MockitoBean InvalidatedTokenRepository invalidatedTokenRepository;
+    @MockitoBean LoginRateLimitService loginRateLimitService;
+    @MockitoBean UserAuthCacheService userAuthCacheService;
+    @MockitoBean TokenBlacklistService tokenBlacklistService;
 
     @Test
     void logoutRequiresBearerToken() throws Exception {
@@ -49,8 +49,9 @@ class AuthControllerTest {
 
     @Test
     void logoutPassesAuthenticatedJwtToService() throws Exception {
-        when(userRepository.findByUsername("alice"))
-                .thenReturn(Optional.of(UserEntity.builder().username("alice").isActive(true).build()));
+        when(userAuthCacheService.getUserAuth("alice"))
+                .thenReturn(UserAuthCacheDTO.builder().username("alice")
+                        .active(true).roles(List.of("READER")).build());
         String token = signedToken();
 
         mvc.perform(post("/api/v1/auth/logout")

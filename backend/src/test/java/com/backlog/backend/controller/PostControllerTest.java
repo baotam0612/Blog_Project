@@ -6,9 +6,8 @@ import com.backlog.backend.model.dto.PostDTO;
 import com.backlog.backend.model.request.PostRequest;
 import com.backlog.backend.model.request.UpdateStatusRequest;
 import com.backlog.backend.model.response.PostResponse;
-import com.backlog.backend.repository.InvalidatedTokenRepository;
-import com.backlog.backend.repository.UserRepository;
-import com.backlog.backend.repository.UserRoleRepository;
+import com.backlog.backend.service.TokenBlacklistService;
+import com.backlog.backend.service.UserAuthCacheService;
 import com.backlog.backend.service.PostService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -61,13 +60,9 @@ class PostControllerTest {
     PostService postService;
 
     @MockitoBean
-    UserRepository userRepository;
-
+    TokenBlacklistService tokenBlacklistService;
     @MockitoBean
-    UserRoleRepository userRoleRepository;
-
-    @MockitoBean
-    InvalidatedTokenRepository invalidatedTokenRepository;
+    UserAuthCacheService userAuthCacheService;
 
     PostRequest postRequest;
     PostDTO postDTO;

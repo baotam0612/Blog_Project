@@ -1,9 +1,9 @@
 package com.backlog.backend.config;
 
-import com.backlog.backend.repository.UserRepository;
-import com.backlog.backend.repository.UserRoleRepository;
-import com.backlog.backend.repository.InvalidatedTokenRepository;
+import com.backlog.backend.model.dto.UserAuthCacheDTO;
 import com.backlog.backend.service.TokenHash;
+import com.backlog.backend.service.TokenBlacklistService;
+import com.backlog.backend.service.UserAuthCacheService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -31,11 +31,13 @@ import java.util.Base64;
 @Configuration
 @EnableWebSecurity
 @EnableMethodSecurity
+
 public class SecurityConfig {
 
     @Value("${jwt.signerKey}")
     protected String SIGNER_KEY;
 
+    // Chứa toàn bộ chuỗi filter và rule URL
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity httpSecurity,
                                             JwtAuthenticationConverter jwtAuthenticationConverter) throws Exception {
@@ -47,6 +49,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/posts/**").authenticated()
                         .requestMatchers("/api/v1/users/**", "/api/v1/users").hasRole("ADMIN")
                         .anyRequest().denyAll());
+
+        // Spring lay Bearer token
         httpSecurity.oauth2ResourceServer(oauth2 ->
                 oauth2.jwt(jwtConfigurer -> jwtConfigurer.jwtAuthenticationConverter(jwtAuthenticationConverter)));
 
@@ -55,30 +59,40 @@ public class SecurityConfig {
         return httpSecurity.build();
     }
 
+    // Lấy username từ Jwt, lấy user/role từ Redis hoặc DB, tạo authority như ROLE_ADMIN
     @Bean
-    JwtAuthenticationConverter jwtAuthenticationConverter(UserRepository userRepository,
-                                                            UserRoleRepository userRoleRepository) {
+    JwtAuthenticationConverter jwtAuthenticationConverter(
+            UserAuthCacheService userAuthCacheService
+    ) {
         JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
+
         converter.setJwtGrantedAuthoritiesConverter(jwt -> {
-            String userName = jwt.getSubject();
-            if (userName == null || userName.isBlank()) {
+            // lay subject trong token -> username
+            String username = jwt.getSubject();
+
+            if (username == null || username.isBlank()) {
                 throw new BadCredentialsException("Token không có tài khoản");
             }
-            var user = userRepository.findByUsername(userName)
-                    .orElseThrow(() -> new BadCredentialsException("Tài khoản không tồn tại"));
-            if (!Boolean.TRUE.equals(user.getIsActive())) {
+
+            UserAuthCacheDTO user = userAuthCacheService.getUserAuth(username);
+
+            if (!Boolean.TRUE.equals(user.getActive())) {
                 throw new BadCredentialsException("Tài khoản đã bị vô hiệu hóa");
             }
-            return userRoleRepository.findRoleCodesByUserName(user.getUsername()).stream()
-                    .map(code -> (GrantedAuthority) new SimpleGrantedAuthority("ROLE_" + code))
+
+            // Doi "ADMIN" -> "ROLE_ADMIN"
+            return user.getRoles().stream()
+                    .map(role -> (GrantedAuthority) new SimpleGrantedAuthority("ROLE_" + role))
                     .toList();
         });
         return converter;
     }
 
 
+
+    //Nhận chuỗi JWT, kiểm tra chữ ký, expiry, blacklist; rồi trả về object Jwt
     @Bean
-    JwtDecoder jwtDecoder(InvalidatedTokenRepository invalidatedTokenRepository){
+    JwtDecoder jwtDecoder(TokenBlacklistService tokenBlacklistService){
         // gồm 2 thông số secret va algo
         byte[] secret = Base64.getDecoder().decode(SIGNER_KEY);
         SecretKeySpec secretKeySpec = new SecretKeySpec(secret, "HS256");
@@ -90,7 +104,11 @@ public class SecurityConfig {
             if (jwt.getExpiresAt() == null) {
                 throw new BadJwtException("Token không có hạn sử dụng");
             }
-            if (invalidatedTokenRepository.existsById(TokenHash.of(token))) {
+            String tokenId = jwt.getId();
+            if (tokenId == null || tokenId.isBlank()) {
+                tokenId = TokenHash.of(token);
+            }
+            if (tokenBlacklistService.isBlacklisted(tokenId)) {
                 throw new BadJwtException("Token đã được đăng xuất");
             }
             return jwt;

@@ -15,4 +15,6 @@ public interface UserRoleRepository extends JpaRepository<UserRoleEntity, Long> 
 
     @Query("select ur.role.code from UserRoleEntity ur where ur.user.username = :userName")
     List<String> findRoleCodesByUserName(@Param("userName") String userName);
+
+    List<UserRoleEntity> findByUser(UserEntity user);
 }

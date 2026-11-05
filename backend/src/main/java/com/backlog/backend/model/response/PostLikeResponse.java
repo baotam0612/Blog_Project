@@ -1,0 +1,18 @@
+package com.backlog.backend.model.response;
+
+
+import lombok.*;
+import lombok.experimental.FieldDefaults;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
+@FieldDefaults(level = AccessLevel.PRIVATE)
+public class PostLikeResponse {
+    String title;
+    String slug;
+
+    String username;
+    String displayname;
+}

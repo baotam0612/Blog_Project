@@ -6,6 +6,7 @@ import lombok.*;
 import lombok.experimental.FieldDefaults;
 
 import java.math.BigInteger;
+import java.util.ArrayList;
 import java.util.List;
 
 @Getter
@@ -45,6 +46,9 @@ public class UserEntity {
     @OneToMany(mappedBy = "userPost", fetch = FetchType.LAZY)
     List<PostEntity> listPost ;
 
+    @Builder.Default
+    @OneToMany(mappedBy = "userEntity", fetch = FetchType.LAZY, cascade = CascadeType.ALL, orphanRemoval = true)
+    List<PostLikeEntity> likeEntityList = new ArrayList<>();
 
 
 }
